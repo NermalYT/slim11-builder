@@ -82,7 +82,7 @@ APP_GROUPS: tuple[AppGroup, ...] = (
         (
             "microsoft.windowscommunicationsapps", "Microsoft.OutlookForWindows",
             "MicrosoftTeams", "MSTeams", "Microsoft.Windows.Teams", "Microsoft.YourPhone",
-            "Microsoft.Windows.CrossDevice",
+            "MicrosoftWindows.CrossDevice", "Microsoft.Windows.CrossDevice",
         ),
     ),
     AppGroup(

@@ -85,8 +85,20 @@ def specialize_script(selection: Selection) -> str:
             r"reg.exe unload 'HKU\Slim11Default' | Out-Null",
             "",
         ]
-    for task in tasks:
-        lines.append(f"schtasks.exe /Change /TN {_cmd_quote(task)} /Disable 2>$null | Out-Null")
+    if tasks:
+        # Task names differ between Windows builds; skip the ones this build lacks
+        # instead of logging schtasks errors for them.
+        lines += [
+            "$tasks = @(",
+            *[f"  {_ps_quote(t)}" for t in tasks],
+            ")",
+            "foreach ($task in $tasks) {",
+            "  $path = $task.Substring(0, $task.LastIndexOf('\\') + 1)",
+            "  $name = $task.Substring($task.LastIndexOf('\\') + 1)",
+            "  $found = Get-ScheduledTask -TaskPath $path -TaskName $name -ErrorAction SilentlyContinue",
+            "  if ($found) { $found | Disable-ScheduledTask | Out-Null; Write-Output \"Disabled task $task\" }",
+            "}",
+        ]
     lines += ["", "Stop-Transcript | Out-Null", ""]
     return "\r\n".join(lines)
 

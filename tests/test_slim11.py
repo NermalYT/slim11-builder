@@ -81,8 +81,13 @@ class SetupFileTests(unittest.TestCase):
         self.assertIn("'Microsoft.BingNews'", script)
         self.assertIn(r'reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection"', script)
         self.assertIn(r"HKU\Slim11Default", script)
-        self.assertIn("schtasks.exe /Change", script)
+        self.assertIn("Disable-ScheduledTask", script)
+        self.assertNotIn("schtasks.exe", script)
         self.assertTrue(script.endswith("\r\n"))
+
+    def test_phone_link_package_name(self):
+        # Build 26300 ships Phone Link as MicrosoftWindows.CrossDevice (no dot after Microsoft).
+        self.assertIn("MicrosoftWindows.CrossDevice", catalog.preset("slim").packages())
 
     def test_empty_selection_script_has_no_actions(self):
         script = setup_files.specialize_script(catalog.Selection())

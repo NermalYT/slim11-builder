@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1
+
+Bug fixes found by installing a v0.1.0 ISO (Windows 11 build 26300) in a VM:
+
+- Phone Link was not removed: build 26300 names it `MicrosoftWindows.CrossDevice`, but the catalog only had `Microsoft.Windows.CrossDevice`. Both names are now matched.
+- The setup log filled with `schtasks` errors for telemetry tasks that do not exist on newer builds. Tasks are now looked up first and only existing ones are disabled.
+
 ## v0.1.0
 
 First release.

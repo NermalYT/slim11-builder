@@ -3,4 +3,4 @@
 Inspired by ntdev's Tiny11 Builder (https://github.com/ntdevlabs/tiny11builder).
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
