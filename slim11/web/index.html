@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slim11 Builder</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Steps">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8.5" height="8.5" rx="1.5"/><rect x="12.5" y="3" width="8.5" height="8.5" rx="1.5"/><rect x="3" y="12.5" width="8.5" height="8.5" rx="1.5"/><rect x="12.5" y="12.5" width="8.5" height="8.5" rx="1.5" class="cut"/></svg>
+      <span>Slim11 Builder</span>
+    </div>
+    <ol class="steps" id="steps">
+      <li data-step="welcome">Choose a build</li>
+      <li data-step="source">Windows image</li>
+      <li data-step="components">Components</li>
+      <li data-step="settings">Build settings</li>
+      <li data-step="build">Build</li>
+    </ol>
+    <button class="rail-link" data-goto="about" type="button">About &amp; credits</button>
+    <div class="host" id="host"></div>
+  </nav>
+
+  <main id="main">
+    <div class="banner warn" id="tool-banner" hidden></div>
+
+    <section data-page="welcome">
+      <h1>Build a smaller Windows 11</h1>
+      <p class="lede">Start from an official Windows 11 ISO, choose what to remove, and get a new ISO. Runs the same on Linux, macOS and Windows, with no administrator rights needed.</p>
+      <div class="cards" id="presets"></div>
+      <p class="note">Test the ISO in a virtual machine before installing it on real hardware.</p>
+    </section>
+
+    <section data-page="source" hidden>
+      <h1>Windows image</h1>
+      <p class="lede">Pick a Windows 11 ISO you downloaded from <a href="https://www.microsoft.com/software-download/windows11" target="_blank" rel="noopener">Microsoft's download page</a>.</p>
+      <label class="field">
+        <span>ISO file</span>
+        <div class="row">
+          <input id="source" type="text" spellcheck="false" placeholder="/path/to/Win11.iso">
+          <button type="button" class="secondary" data-browse="source">Browse…</button>
+          <button type="button" id="inspect">Read editions</button>
+        </div>
+      </label>
+      <div id="editions-wrap" hidden>
+        <h2>Edition</h2>
+        <div class="list" id="editions" role="radiogroup"></div>
+      </div>
+      <p class="status" id="source-status"></p>
+    </section>
+
+    <section data-page="components" hidden>
+      <h1>Components</h1>
+      <p class="lede">Everything checked is removed or changed. Windows Update, Defender, the Store and recovery are always kept.</p>
+      <h2>Apps</h2>
+      <div class="list" id="apps"></div>
+      <h2>Files</h2>
+      <div class="list" id="files"></div>
+      <h2>Settings and policies</h2>
+      <div class="list" id="tweaks"></div>
+      <h2>More apps</h2>
+      <label class="field">
+        <span>Extra provisioned app names to remove, one per line (matched as prefixes)</span>
+        <textarea id="extra" rows="3" spellcheck="false" placeholder="Microsoft.WindowsNotepad"></textarea>
+      </label>
+    </section>
+
+    <section data-page="settings" hidden>
+      <h1>Build settings</h1>
+      <label class="field">
+        <span>Save the new ISO as</span>
+        <div class="row">
+          <input id="output" type="text" spellcheck="false">
+          <button type="button" class="secondary" data-browse="output">Browse…</button>
+        </div>
+      </label>
+      <h2>Image format</h2>
+      <div class="list" role="radiogroup">
+        <label class="item"><input type="radio" name="format" value="esd" checked><div><strong>Smallest (ESD)</strong><small>Solid LZMS compression. Slowest to build, smallest ISO.</small></div></label>
+        <label class="item"><input type="radio" name="format" value="wim"><div><strong>Faster (WIM)</strong><small>LZX compression. Quicker to build, larger ISO.</small></div></label>
+      </div>
+      <h2>Options</h2>
+      <div class="list">
+        <label class="item"><input type="checkbox" id="compact"><div><strong>Compact installation</strong><small>Installs Windows with CompactOS to save disk space on the target PC.</small></div></label>
+      </div>
+      <label class="field">
+        <span>Work folder (optional; needs about three times the ISO size free)</span>
+        <div class="row">
+          <input id="workdir" type="text" spellcheck="false" placeholder="Next to the output ISO">
+          <button type="button" class="secondary" data-browse="workdir">Browse…</button>
+        </div>
+      </label>
+      <div class="summary" id="summary"></div>
+    </section>
+
+    <section data-page="build" hidden>
+      <h1 id="build-title">Ready to build</h1>
+      <div class="progress"><div id="bar"></div></div>
+      <p class="status" id="build-status"></p>
+      <pre class="log" id="log" aria-live="polite"></pre>
+    </section>
+
+    <section data-page="about" hidden>
+      <h1>About Slim11 Builder</h1>
+      <p class="lede">A cross-platform Windows 11 ISO trimmer. Version <span id="version"></span>.</p>
+      <div class="credit">
+        <h2>Built on the work of Tiny11 Builder</h2>
+        <p>Slim11 exists because of <strong>ntdev</strong> and the
+          <a href="https://github.com/ntdevlabs/tiny11builder" target="_blank" rel="noopener">Tiny11 Builder</a> project,
+          including its <a href="https://github.com/ntdevlabs/tiny11builder/releases/tag/winui-v0.1.2" target="_blank" rel="noopener">WinUI app</a>.
+          The idea, the Tiny11 / Custom build modes, the step-by-step wizard and the choice of what a lean Windows should drop all come from there.
+          This app is an independent rewrite for Linux and macOS as well as Windows; it contains no Tiny11 Builder code.</p>
+        <p>If Slim11 is useful to you, please support the original author:
+          <a href="https://github.com/sponsors/ntdevlabs" target="_blank" rel="noopener">GitHub Sponsors</a> ·
+          <a href="https://www.patreon.com/ntdev" target="_blank" rel="noopener">Patreon</a> ·
+          <a href="https://ko-fi.com/ntdev" target="_blank" rel="noopener">Ko-fi</a></p>
+        <p>The look follows Microsoft's <a href="https://learn.microsoft.com/windows/apps/winui/" target="_blank" rel="noopener">WinUI</a> / Fluent design language. Image work is done by
+          <a href="https://wimlib.net" target="_blank" rel="noopener">wimlib</a> (Eric Biggers) and ISO writing by
+          <a href="https://github.com/clalancette/pycdlib" target="_blank" rel="noopener">pycdlib</a> (Chris Lalancette).</p>
+        <p class="note">Not affiliated with Microsoft or ntdev. Windows is a trademark of Microsoft. Windows media and activation remain subject to Microsoft's terms.</p>
+      </div>
+    </section>
+
+    <footer class="actions">
+      <button type="button" class="secondary" id="back">Back</button>
+      <span class="spacer"></span>
+      <button type="button" id="next">Next</button>
+    </footer>
+  </main>
+</div>
+
+<dialog id="picker">
+  <form method="dialog">
+    <h2 id="picker-title">Choose a file</h2>
+    <div class="row"><select id="picker-roots"></select><input id="picker-path" type="text" spellcheck="false"></div>
+    <ul class="picker-list" id="picker-list"></ul>
+    <div class="row" id="picker-name-row"><span>File name</span><input id="picker-name" type="text" spellcheck="false"></div>
+    <div class="row end">
+      <button value="cancel" class="secondary">Cancel</button>
+      <button value="ok" id="picker-ok">Select</button>
+    </div>
+  </form>
+</dialog>
+<script src="app.js"></script>
+</body>
+</html>
