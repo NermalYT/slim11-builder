@@ -111,13 +111,16 @@ class Wimlib:
         return parse_info(result.stdout)
 
     def export(self, src: str, index: int, dest: str, *, compress: str, solid: bool = False,
-               progress: Callable[[float], None] | None = None, name: str | None = None) -> None:
+               progress: Callable[[float], None] | None = None, name: str | None = None,
+               threads: int | None = None) -> None:
         args = [self.exe, "export", src, str(index), dest]
         if name:
             args.append(name)
         args += [f"--compress={compress}"]
         if solid:
             args.append("--solid")
+        if threads:
+            args.append(f"--threads={threads}")
         run(args, log=self.log, progress=progress, cancel=self.cancel)
 
     def update(self, wim: str, index: int, commands: list[str]) -> None:

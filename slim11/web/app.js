@@ -351,6 +351,46 @@ function finishPicker() {
   if (picker.target === "source") inspect();
 }
 
+/* ---------- settings ---------- */
+
+function renderSettings(data) {
+  $("#ai-toggle").checked = data.ai_features;
+  $("#ai-setup").hidden = !data.ai_features;
+  $("#ai-detected").textContent = data.detected.length ? ` (found: ${data.detected.join(", ")})` : "";
+  $("#ai-snippets").replaceChildren(...Object.entries(data.snippets).map(([name, text]) =>
+    el("div", { class: "snippet" }, el("strong", {}, name), el("pre", {}, text))));
+}
+
+$("#ai-toggle").addEventListener("change", async (e) => {
+  try { renderSettings(await api("/api/settings", { ai_features: e.target.checked })); }
+  catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
+});
+
+/* ---------- updates ---------- */
+
+async function checkForUpdate() {
+  let info;
+  try { info = await api("/api/update"); } catch (_) { return; }
+  if (!info.updateAvailable) return;
+  $("#update-text").textContent = `Slim11 ${info.latest} is available (you have ${info.current}).`;
+  $("#update-notes").href = info.release.url;
+  $("#update-banner").hidden = false;
+}
+
+$("#update-now").addEventListener("click", async () => {
+  const button = $("#update-now");
+  button.disabled = true;
+  $("#update-text").textContent = "Updating…";
+  try {
+    const { version } = await api("/api/update", {});
+    $("#update-text").textContent = `Updated to ${version}. Close this tab, stop Slim11 and start it again to use the new version.`;
+    button.hidden = true;
+  } catch (err) {
+    $("#update-text").textContent = "Update failed: " + err.message;
+    button.disabled = false;
+  }
+});
+
 /* ---------- start ---------- */
 
 (async function init() {
@@ -366,6 +406,8 @@ function finishPicker() {
     }
     renderPresets();
     renderComponents();
+    checkForUpdate();
+    api("/api/settings").then(renderSettings).catch(() => {});
     const job = await api("/api/job?since=0");
     if (job.state !== "idle") { state.job = job.state; show("build"); poll(); return; }
   } catch (err) {

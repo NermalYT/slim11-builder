@@ -15,87 +15,35 @@ import platform
 import secrets
 import sys
 import threading
-import time
-import traceback
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import __version__, catalog
-from .engine import BuildConfig, build, inspect_iso
-from .tools import Cancelled, CancelToken, find_wimlib, install_hint
+from .engine import inspect_iso
+from .jobs import Job, config_from_profile
+from .tools import find_wimlib, install_hint
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
-
-
-class Job:
-    def __init__(self) -> None:
-        self.lock = threading.Lock()
-        self.state = "idle"        # idle | running | done | failed | cancelled
-        self.stage = ""
-        self.progress = 0.0
-        self.log: list[str] = []
-        self.error = ""
-        self.output = ""
-        self.started = 0.0
-        self.token: CancelToken | None = None
-
-    def snapshot(self, since: int) -> dict:
-        with self.lock:
-            return {"state": self.state, "stage": self.stage, "progress": self.progress,
-                    "log": self.log[since:], "logLength": len(self.log), "error": self.error,
-                    "output": self.output, "elapsed": time.time() - self.started if self.started else 0}
-
-    def add_log(self, line: str) -> None:
-        with self.lock:
-            self.log.append(line)
-            del self.log[:-5000]
-
-    def set_progress(self, stage: str, value: float) -> None:
-        with self.lock:
-            self.stage, self.progress = stage, value
 
 
 JOB = Job()
 
 
 def _start_build(payload: dict) -> None:
-    with JOB.lock:
-        if JOB.state == "running":
-            raise ValueError("A build is already running.")
-    sel = payload.get("selection") or {}
-    selection = catalog.Selection(
-        apps=list(sel.get("apps", [])), files=list(sel.get("files", [])), tweaks=list(sel.get("tweaks", [])),
-        extra_packages=[p for p in sel.get("extra_packages", []) if isinstance(p, str)],
-    )
-    selection.validate()
-    config = BuildConfig(
-        source_iso=str(payload["source"]), edition_index=int(payload["edition"]),
-        output_iso=str(payload["output"]), selection=selection,
-        format=payload.get("format", "esd"), compact_install=bool(payload.get("compact")),
-        work_dir=payload.get("workDir") or None,
-    )
-    token = CancelToken()
-    with JOB.lock:
-        JOB.state, JOB.stage, JOB.progress, JOB.log, JOB.error, JOB.output = "running", "prepare", 0.0, [], "", ""
-        JOB.started, JOB.token = time.time(), token
+    JOB.start(config_from_profile({
+        "source": payload.get("source"), "edition": payload.get("edition"), "output": payload.get("output"),
+        "selection": payload.get("selection") or {}, "format": payload.get("format", "esd"),
+        "compact": bool(payload.get("compact")), "workDir": payload.get("workDir") or None,
+    }))
 
-    def worker() -> None:
-        try:
-            out = build(config, log=JOB.add_log, progress=JOB.set_progress, cancel=token)
-            with JOB.lock:
-                JOB.state, JOB.output, JOB.progress = "done", out, 1.0
-        except Cancelled:
-            JOB.add_log("Build cancelled.")
-            with JOB.lock:
-                JOB.state = "cancelled"
-        except Exception as exc:  # report every failure to the UI
-            JOB.add_log(traceback.format_exc().rstrip())
-            with JOB.lock:
-                JOB.state, JOB.error = "failed", str(exc)
 
-    threading.Thread(target=worker, name="slim11-build", daemon=True).start()
+def _settings_payload() -> dict:
+    from . import ai, settings
+    data = settings.load()
+    return {"ai_features": data["ai_features"], "path": str(settings.path()),
+            "snippets": ai.config_snippets(), "detected": ai.detected_tools()}
 
 
 def _browse(path: str | None) -> dict:
@@ -163,6 +111,14 @@ class Handler(BaseHTTPRequestHandler):
                     "python": platform.python_version(), "wimlib": find_wimlib(), "hint": install_hint(),
                     "home": str(Path.home()), "sep": os.sep,
                 })
+            if path == "/api/settings":
+                return self._json(_settings_payload())
+            if path == "/api/update":
+                from . import updater
+                try:
+                    return self._json(updater.check())
+                except Exception as exc:  # offline, rate-limited, no releases yet
+                    return self._json({"current": __version__, "updateAvailable": False, "error": str(exc)})
             if path == "/api/catalog":
                 return self._json(catalog.as_dict())
             if path == "/api/job":
@@ -196,11 +152,22 @@ class Handler(BaseHTTPRequestHandler):
                 _start_build(payload)
                 return self._json({"ok": True})
             if self.path == "/api/cancel":
-                if JOB.token:
-                    JOB.token.cancel()
+                JOB.cancel()
                 return self._json({"ok": True})
             if self.path == "/api/exists":
                 return self._json({"exists": Path(str(payload["path"])).expanduser().exists()})
+            if self.path == "/api/settings":
+                from . import ai
+                if "ai_features" in payload:
+                    ai.set_enabled(bool(payload["ai_features"]))
+                return self._json(_settings_payload())
+            if self.path == "/api/update":
+                from . import updater
+                if JOB.state == "running":
+                    raise ValueError("Wait for the build to finish before updating.")
+                lines: list[str] = []
+                version = updater.apply(log=lines.append)
+                return self._json({"version": version, "log": lines})
             if self.path == "/api/quit":
                 self._json({"ok": True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -222,6 +189,5 @@ def serve(port: int = 0, open_browser: bool = True) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        if JOB.token:
-            JOB.token.cancel()
+        JOB.cancel()
         httpd.server_close()

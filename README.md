@@ -32,20 +32,53 @@ You need **Python 3.10+** and **wimlib**.
 | Fedora | `sudo dnf install wimlib-utils` |
 | Arch | `sudo pacman -S wimlib` |
 | macOS | `brew install wimlib` |
-| Windows | Download the Windows build from [wimlib.net](https://wimlib.net/downloads/) and extract it into a `tools` folder next to this README (or set `SLIM11_WIMLIB` to `wimlib-imagex.exe`) |
+| Windows | Download the Windows build from [wimlib.net](https://wimlib.net/downloads/) and extract it into `%USERPROFILE%\.slim11\tools` (or set `SLIM11_WIMLIB` to `wimlib-imagex.exe`) |
 
-Then, from a clone of this repository:
+Then run the installer. It installs the latest release into its own Python
+environment and asks whether to turn on the [AI agent features](#ai-agents).
+
+**Linux / macOS**
 
 ```bash
-./slim11.sh
+curl -fsSL https://github.com/NermalYT/slim11-builder/releases/latest/download/install.sh | sh
 ```
 
-On Windows, run `slim11.cmd`. The launcher creates a virtual environment, installs
-the one Python dependency ([pycdlib](https://github.com/clalancette/pycdlib)),
-starts the builder and opens it in your browser. No administrator or root rights
-are needed.
+**Windows (PowerShell)**
 
-You can also install it with pip: `pip install .` and run `slim11`.
+```powershell
+irm https://github.com/NermalYT/slim11-builder/releases/latest/download/install.ps1 | iex
+```
+
+Then run `slim11`. It opens in your browser; no administrator or root rights are
+needed. The Windows installer can also download wimlib and add `slim11` to your PATH.
+
+Non-interactive installs: `sh -s -- --yes --no-ai` (or `--ai --register`) after
+`curl ... |`, or `install.ps1 -Yes -Ai off`.
+
+<details><summary>Manual install with pip</summary>
+
+```bash
+python3 -m venv ~/.slim11/venv
+~/.slim11/venv/bin/pip install https://github.com/NermalYT/slim11-builder/releases/download/v0.1.0/slim11_builder-0.1.0-py3-none-any.whl
+~/.slim11/venv/bin/slim11
+```
+
+Any release's wheel works. To run straight from a clone instead, use `./slim11.sh`
+(Linux/macOS) or `slim11.cmd` (Windows).
+</details>
+
+### Updating
+
+Slim11 checks GitHub for a newer release when it starts and shows an
+**Update now** banner. From the command line:
+
+```bash
+slim11 update --check   # report only
+slim11 update           # install the newest release
+```
+
+A release install is upgraded with pip in the same environment; a git clone is
+fast-forwarded to the newest release tag.
 
 ## Use
 
@@ -62,6 +95,59 @@ slim11 inspect Win11_24H2_English_x64.iso
 slim11 build Win11_24H2_English_x64.iso -e 6 -o Win11-slim.iso
 slim11 build Win11.iso -e 6 -o Win11-light.iso --preset light --add-files onedrive
 slim11 catalog    # every app group, file removal and tweak id, as JSON
+```
+
+## AI agents
+
+Slim11 can be driven by AI coding agents such as **Claude Code**, **Codex**,
+**Antigravity** and **Gemini CLI** through an [MCP](https://modelcontextprotocol.io)
+server built into the app (`slim11 mcp`). An agent can find your ISOs, list
+editions, read the catalog, edit a build profile, preview exactly what will be
+removed, run the build and watch its progress. Agents are told to show you the
+preview and get your OK before building.
+
+It is **off by default**. The installer asks; you can change it any time:
+
+```bash
+slim11 ai on                       # or: slim11 ai off
+slim11 ai on --register detected   # also add Slim11 to Claude Code / Codex / Gemini CLI found here
+slim11 ai                          # status and copy-paste config for any MCP client
+```
+
+or with the **AI agent access** switch under *About & settings* in the app.
+When it is off, `slim11 mcp` refuses to start.
+
+Manual setup, if you prefer (use the paths `slim11 ai` prints):
+
+| Tool | Setup |
+| --- | --- |
+| Claude Code | `claude mcp add --scope user slim11 -- ~/.slim11/venv/bin/python -m slim11 mcp` |
+| Codex | add `[mcp_servers.slim11]` with `command` and `args = ["-m", "slim11", "mcp"]` to `~/.codex/config.toml` |
+| Antigravity, Gemini CLI, Cursor, others | add `"slim11": {"command": ".../python", "args": ["-m", "slim11", "mcp"]}` under `mcpServers` |
+
+Tools: `get_status`, `get_catalog`, `get_preset`, `find_isos`, `list_editions`,
+`preview_build`, `start_build`, `build_status`, `cancel_build`, `load_profile`,
+`save_profile`.
+
+### Build profiles
+
+Agents and people can save a build as JSON and reuse it from the CLI:
+
+```json
+{
+  "source": "/isos/Win11_English_x64.iso",
+  "edition": 6,
+  "output": "/isos/Win11-slim.iso",
+  "preset": "light",
+  "add": {"files": ["onedrive"]},
+  "remove": {"tweaks": ["search"]},
+  "format": "esd"
+}
+```
+
+```bash
+slim11 build --profile my-build.json
+slim11 build Win11.iso -e 6 -o out.iso --preset light --save-profile my-build.json
 ```
 
 ## How it works
@@ -95,10 +181,12 @@ everywhere:
 
 ## Status
 
-0.1.0 is an early release. The build pipeline is covered by automated tests on
-Linux, macOS and Windows using synthetic images. Installing a real Windows 11
-build from a Slim11 ISO has not been verified yet; please test in a VM and
-open an issue with the build number and `Specialize.log` if something fails.
+Early release. Automated tests cover the pipeline on Linux, macOS and Windows.
+Each release is also checked by building the official Windows 11 ISO on Linux
+and installing the result in a UEFI virtual machine without TPM or Secure Boot;
+see [CHANGELOG.md](CHANGELOG.md) for what was tested. Please test in a VM first
+and open an issue with the Windows build number and
+`C:\Windows\Setup\Scripts\Slim11\Specialize.log` if something fails.
 
 ## Credits
 

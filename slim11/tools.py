@@ -29,7 +29,7 @@ def find_wimlib() -> str | None:
     if env and Path(env).is_file():
         return env
     exe = "wimlib-imagex.exe" if sys.platform == "win32" else "wimlib-imagex"
-    for base in (APP_DIR / "bin", APP_DIR.parent / "tools"):
+    for base in (APP_DIR / "bin", APP_DIR.parent / "tools", Path.home() / ".slim11" / "tools"):
         if base.is_dir():
             found = sorted(base.glob(f"**/{exe}"))
             if found:
@@ -42,10 +42,56 @@ def install_hint() -> str:
         return "Install wimlib with Homebrew: brew install wimlib"
     if sys.platform == "win32":
         return ("Download the Windows build of wimlib from https://wimlib.net/downloads/ and extract "
-                "wimlib-imagex.exe and libwim-15.dll into the tools folder next to Slim11, "
-                "or set SLIM11_WIMLIB to its path.")
+                "its files into %USERPROFILE%\\.slim11\\tools (or the tools folder of a source checkout), "
+                "or set SLIM11_WIMLIB to the path of wimlib-imagex.exe.")
     return ("Install wimlib: sudo apt install wimtools (Debian/Ubuntu), sudo dnf install wimlib-utils "
             "(Fedora), sudo pacman -S wimlib (Arch).")
+
+
+def available_memory() -> int | None:
+    """Bytes of memory currently available, or None if unknown."""
+    try:
+        if sys.platform.startswith("linux"):
+            with open("/proc/meminfo", encoding="ascii") as fh:
+                for line in fh:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) * 1024
+        elif sys.platform == "win32":
+            import ctypes
+
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            status = MemoryStatus()
+            status.dwLength = ctypes.sizeof(MemoryStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):  # type: ignore[attr-defined]
+                return int(status.ullAvailPhys)
+        elif sys.platform == "darwin":
+            out = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+            page = int(re.search(r"page size of (\d+)", out).group(1))  # type: ignore[union-attr]
+            free = sum(int(m) for m in re.findall(r"Pages (?:free|inactive|speculative):\s+(\d+)", out))
+            return free * page
+    except (OSError, ValueError, AttributeError):
+        return None
+    return None
+
+
+# Solid LZMS compression in wimlib needs roughly this much memory per thread.
+LZMS_BYTES_PER_THREAD = 768 * 1024 ** 2
+
+
+def solid_threads() -> int:
+    """Thread count for solid LZMS that leaves the rest of the machine usable."""
+    cpus = os.cpu_count() or 1
+    avail = available_memory()
+    if avail is None:
+        return min(cpus, 4)
+    budget = avail // 2  # leave half of what's free for the user's other programs
+    return max(1, min(cpus, budget // LZMS_BYTES_PER_THREAD))
 
 
 @dataclass

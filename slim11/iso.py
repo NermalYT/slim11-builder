@@ -15,11 +15,15 @@ from typing import Callable
 
 import pycdlib
 
-MAX_ISO_FILE = 4 * 1024 ** 3 - 1
+# FAT32 limit; only matters when the ISO is copied to a FAT32 USB stick.
+FAT32_MAX_FILE = 4 * 1024 ** 3 - 1
 
 BIOS_BOOT = "boot/etfsboot.com"
-UEFI_BOOT_CANDIDATES = ("efi/microsoft/boot/efisys_noprompt.bin", "efi/microsoft/boot/efisys.bin")
+# The default image asks "Press any key to boot from CD or DVD", like Microsoft's
+# own media. Without that prompt a PC whose firmware boots the stick first
+# restarts straight back into Setup after the first reboot.
 UEFI_BOOT_PROMPT = "efi/microsoft/boot/efisys.bin"
+UEFI_BOOT_NOPROMPT = "efi/microsoft/boot/efisys_noprompt.bin"
 
 README = (b"This disc contains a UDF file system and requires an operating system\r\n"
           b"that supports UDF to read it. Built by Slim11 Builder.\r\n")
@@ -84,11 +88,10 @@ def _find(root: Path, rel: str) -> Path | None:
 
 
 def build(src_dir: str, iso_path: str, *, label: str, log: Callable[[str], None],
-          prompt_for_key: bool = False, check_cancel: Callable[[], None] | None = None) -> None:
+          no_prompt: bool = False, check_cancel: Callable[[], None] | None = None) -> None:
     root = Path(src_dir)
     bios = _find(root, BIOS_BOOT)
-    uefi_rel = UEFI_BOOT_PROMPT if prompt_for_key else next(
-        (c for c in UEFI_BOOT_CANDIDATES if _find(root, c)), UEFI_BOOT_PROMPT)
+    uefi_rel = UEFI_BOOT_NOPROMPT if no_prompt and _find(root, UEFI_BOOT_NOPROMPT) else UEFI_BOOT_PROMPT
     uefi = _find(root, uefi_rel)
     if not bios and not uefi:
         raise RuntimeError("No boot image found (boot/etfsboot.com or efi/microsoft/boot/efisys.bin).")
@@ -120,9 +123,6 @@ def build(src_dir: str, iso_path: str, *, label: str, log: Callable[[str], None]
             if check_cancel:
                 check_cancel()
             full = Path(dirpath) / name
-            size = full.stat().st_size
-            if size > MAX_ISO_FILE:
-                raise RuntimeError(f"{full.name} is larger than 4 GiB; it must be split or compressed first.")
             udf = "/" + (name if rel_dir == "." else f"{rel_dir}/{name}")
             iso_name = boot_iso_names.get(full.resolve())
             iso.add_file(str(full), udf_path=udf, **({"iso_path": iso_name} if iso_name else {}))

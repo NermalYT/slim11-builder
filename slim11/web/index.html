@@ -20,12 +20,18 @@
       <li data-step="settings">Build settings</li>
       <li data-step="build">Build</li>
     </ol>
-    <button class="rail-link" data-goto="about" type="button">About &amp; credits</button>
+    <button class="rail-link" data-goto="about" type="button">About &amp; settings</button>
     <div class="host" id="host"></div>
   </nav>
 
   <main id="main">
     <div class="banner warn" id="tool-banner" hidden></div>
+    <div class="banner info" id="update-banner" hidden>
+      <span id="update-text"></span>
+      <span class="spacer"></span>
+      <a id="update-notes" target="_blank" rel="noopener">Release notes</a>
+      <button type="button" id="update-now">Update now</button>
+    </div>
 
     <section data-page="welcome">
       <h1>Build a smaller Windows 11</h1>
@@ -106,6 +112,15 @@
     <section data-page="about" hidden>
       <h1>About Slim11 Builder</h1>
       <p class="lede">A cross-platform Windows 11 ISO trimmer. Version <span id="version"></span>.</p>
+      <h2>AI agent access</h2>
+      <div class="list">
+        <label class="item"><input type="checkbox" id="ai-toggle"><div><strong>Let AI coding agents control Slim11</strong>
+          <small>Claude Code, Codex, Antigravity, Gemini CLI and other MCP clients can list editions, change what gets removed, preview and run builds through <code>slim11 mcp</code>. Off by default; agents are told to show you a preview and get your OK before building.</small></div></label>
+      </div>
+      <div id="ai-setup" class="summary" hidden>
+        <p>Connect your AI tool to Slim11. Paste the matching entry into its MCP settings, or run <code>slim11 ai on --register detected</code> to add it to the tools found on this computer<span id="ai-detected"></span>.</p>
+        <div id="ai-snippets"></div>
+      </div>
       <div class="credit">
         <h2>Built on the work of Tiny11 Builder</h2>
         <p>Slim11 exists because of <strong>ntdev</strong> and the

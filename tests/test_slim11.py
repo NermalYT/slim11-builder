@@ -36,6 +36,7 @@ def make_media(root: Path) -> None:
     (root / "sources").mkdir()
     (root / "boot/etfsboot.com").write_bytes(b"\0" * 2048)
     (root / "efi/microsoft/boot/efisys.bin").write_bytes(b"\1" * 1474560)
+    (root / "efi/microsoft/boot/efisys_noprompt.bin").write_bytes(b"\2" * 1474560)
     (root / "setup.exe").write_bytes(b"setup")
     (root / "sources/empty.txt").write_bytes(b"")
 
@@ -131,6 +132,57 @@ class RunTests(unittest.TestCase):
         self.assertLess(time.monotonic() - start, 10)
 
 
+class UpdaterTests(unittest.TestCase):
+    RELEASE = {"tag_name": "v9.0.0", "html_url": "https://example.invalid/r", "body": "notes",
+               "assets": [{"name": "slim11_builder-9.0.0.tar.gz", "browser_download_url": "https://x/a.tar.gz"},
+                          {"name": "slim11_builder-9.0.0-py3-none-any.whl", "browser_download_url": "https://x/a.whl"}]}
+
+    def test_versions(self):
+        from slim11 import updater
+        self.assertTrue(updater.is_newer("v0.1.1", "0.1.0"))
+        self.assertTrue(updater.is_newer("0.2", "0.1.9"))
+        self.assertFalse(updater.is_newer("v0.1.0", "0.1.0"))
+        self.assertFalse(updater.is_newer("0.1", "0.1.0"))
+        self.assertEqual(updater.parse_version("v1.2.3"), (1, 2, 3))
+
+    def test_release_picks_wheel(self):
+        from slim11 import updater
+        rel = updater.release_from_json(self.RELEASE)
+        self.assertEqual((rel.version, rel.wheel_url), ("9.0.0", "https://x/a.whl"))
+        self.assertEqual(updater.release_from_json_dict(rel.to_dict()), rel)
+
+    def test_apply_pip_and_git(self):
+        from unittest import mock
+        from slim11 import updater
+        rel = updater.release_from_json(self.RELEASE)
+        for method, expected in (("pip", "https://x/a.whl"), ("git", "v9.0.0")):
+            calls = []
+            with mock.patch.object(updater, "install_method", return_value=method), \
+                 mock.patch.object(updater, "_run", side_effect=lambda args, *_a: calls.append(args)):
+                self.assertEqual(updater.apply(log=lambda _m: None, release=rel), "9.0.0")
+            self.assertTrue(any(expected in args for args in calls), (method, calls))
+
+    def test_apply_noop_when_current(self):
+        from unittest import mock
+        from slim11 import __version__, updater
+        rel = updater.Release(__version__, "v" + __version__, "", "", None)
+        with mock.patch.object(updater, "_run") as run_:
+            self.assertEqual(updater.apply(log=lambda _m: None, release=rel), __version__)
+            run_.assert_not_called()
+
+
+class MemoryTests(unittest.TestCase):
+    def test_solid_threads_respects_memory(self):
+        from unittest import mock
+        from slim11 import tools
+        with mock.patch.object(tools, "available_memory", return_value=2 * 1024 ** 3):
+            self.assertEqual(tools.solid_threads(), 1)
+        with mock.patch.object(tools, "available_memory", return_value=None):
+            self.assertLessEqual(tools.solid_threads(), 4)
+        with mock.patch.object(tools, "available_memory", return_value=10 ** 15):
+            self.assertEqual(tools.solid_threads(), os.cpu_count())
+
+
 class IsoTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="slim11-test-"))
@@ -162,6 +214,26 @@ class IsoTests(unittest.TestCase):
 
         eds = inspect_iso(str(out))
         self.assertEqual(len(eds), 2)
+
+    def _uefi_image(self, **kwargs) -> bytes:
+        media = Path(tempfile.mkdtemp(dir=self.tmp)) / "media"
+        make_media(media)
+        out = media.parent / "uefi.iso"
+        iso.build(str(media), str(out), label="x", log=lambda _m: None, **kwargs)
+        import pycdlib
+        disc = pycdlib.PyCdlib()
+        disc.open(str(out))
+        try:
+            data = io.BytesIO()
+            disc.get_file_from_iso_fp(data, iso_path="/EFIBOOT/EFISYS.BIN;1")
+            return data.getvalue()[:16]
+        finally:
+            disc.close()
+
+    def test_uefi_boot_prompts_by_default(self):
+        # Without the prompt, a PC that boots the stick first loops back into Setup.
+        self.assertEqual(self._uefi_image(), b"\1" * 16)
+        self.assertEqual(self._uefi_image(no_prompt=True), b"\2" * 16)
 
     def test_missing_boot_files_fail(self):
         (self.tmp / "m").mkdir()

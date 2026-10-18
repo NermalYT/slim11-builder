@@ -12,7 +12,7 @@ from typing import Callable
 from . import iso as isofs
 from .catalog import Selection
 from .setup_files import SCRIPT_DIR_IN_IMAGE, SCRIPT_NAME, autounattend, specialize_script
-from .tools import CancelToken, ToolError, find_wimlib, install_hint
+from .tools import CancelToken, ToolError, find_wimlib, install_hint, solid_threads
 from .wim import Edition, Wimlib, editions_from_header, quote_wim_path
 
 SWM_PART_MIB = 3800
@@ -172,13 +172,15 @@ def build(config: BuildConfig, *, log: Callable[[str], None], progress: Callable
         rep.begin("compress")
         sources = image.parent
         if config.format == "esd":
+            threads = solid_threads()
+            log(f"Compressing with {threads} thread(s) to keep memory use in check")
             wim.export(str(single), 1, str(sources / "install.esd"), compress="LZMS", solid=True,
-                       progress=rep.fraction)
+                       progress=rep.fraction, threads=threads)
         elif config.format == "wim":
             target = sources / "install.wim"
             wim.export(str(single), 1, str(target), compress="LZX", progress=rep.fraction)
-            if target.stat().st_size > isofs.MAX_ISO_FILE:
-                log("install.wim is over 4 GiB; splitting into install.swm parts")
+            if target.stat().st_size > isofs.FAT32_MAX_FILE:
+                log("install.wim is over 4 GiB; splitting into install.swm parts so FAT32 USB sticks work")
                 wim.split(str(target), str(sources / "install.swm"), SWM_PART_MIB)
                 target.unlink()
         else:
