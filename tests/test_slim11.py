@@ -280,7 +280,7 @@ class EndToEndTests(unittest.TestCase):
             iso.extract(str(out), str(back), log=lambda _m: None)
             self.assertTrue((back / "autounattend.xml").is_file())
             listing = subprocess.run([wimlib, "dir", str(back / "sources/install.esd"), "1"],
-                                     check=True, capture_output=True, text=True).stdout
+                                     check=True, capture_output=True, text=True).stdout.replace("\\", "/")
             self.assertIn("/Windows/Setup/Scripts/Slim11/Specialize.ps1", listing)
             self.assertIn("/Windows/System32/notepad.exe", listing)
             self.assertNotIn("OneDriveSetup.exe", listing)
